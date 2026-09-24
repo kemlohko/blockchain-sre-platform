@@ -1,0 +1,94 @@
+---
+- name: Install Grafana repository prerequisites
+  ansible.builtin.apt:
+    name:
+     - apt-transport-https
+     - software-properties-common
+     - wget
+     - gpg
+    state: present
+    update_cache: true
+
+- name: Create Grafana APT keyring directory
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Download Grafana repository siging key
+  ansible.builtin.get_url:
+    url: https://apt.grafana.com/gpg.key
+    dest: /etc/apt/keyrings/grafana.asc
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Configure Grafana APT repository
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by=/etc/apt/keyrings/grafana.asc] https://apt.grafana.com stable main"
+    filename: grafana
+    state: present
+    update_cache: true
+
+- name: Install Grafana
+  ansible.builtin.apt:
+    name: grafana
+    state: present
+
+- name: Configure Grafana localhost binding
+  ansible.builtin.lineinfile:
+    path: /etc/grafana/grafana.ini
+    regexp: '^;?http_addr\s*='
+    line: 'http_addr = 127.0.0.1'
+  notify: Restart grafana
+
+- name: Configure Grafana port
+  ansible.builtin.lineinfile:
+    path: /etc/grafana/grafana.ini
+    regexp: '^;?http_port\s*='
+    line: 'http_port = 3000'
+  notify: Restart grafana
+
+- name: Provision Grafana Prometheus datasource
+  ansible.builtin.template:
+    src: grafana/provisioning/datasources/prometheus.yml.j2
+    dest: /etc/grafana/provisioning/datasources/prometheus.yml
+    owner: root
+    group: grafana
+    mode: "0644"
+  notify: Restart grafana
+
+- name: Create Grafana dashboard directory
+  ansible.builtin.file:
+    path: /var/lib/grafana/dashboards
+    state: directory
+    owner: grafana
+    group: grafana
+    mode: "0755"
+
+- name: Provision Grafana dashboard provider
+  ansible.builtin.template:
+    src: grafana/provisioning/dashboards/dashboards.yml.j2
+    dest: /etc/grafana/provisioning/dashboards/blockchain-sre.yml
+    owner: root
+    group: grafana
+    mode: "0640"
+  notify: Restart grafana
+
+- name: Install Ethereum node dashboard
+  ansible.builtin.copy:
+    src: grafana/dashboards/ethereum-node-overview.json
+    dest: /var/lib/grafana/dashboards/ethereum-node-overview.json
+    owner: grafana
+    group: grafana
+    mode: "0644"
+  notify: Restart grafana
+
+- name: Enable and start Grafana
+  ansible.builtin.systemd_service:
+    name: grafana-server
+    enabled: true
+    state: started
+    daemon_reload: true

@@ -1,0 +1,8 @@
+---
+
+- name: Configure Ethereum nodes
+  hosts: ethereum_nodes
+  become: true
+
+  roles:
+    - ethereum_node

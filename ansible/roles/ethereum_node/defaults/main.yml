@@ -1,0 +1,14 @@
+---
+lighthouse_version: "v8.2.2"
+lighthouse_network: "sepolia"
+lighthouse_checkpoint_sync_url: "https://beaconstate-sepolia.chainsafe.io"
+
+node_exporter_version: "1.9.1"
+
+ethereum_ancient_device: /dev/vdb
+ethereum_ancient_uuid: "4d19ccb6-5ecd-4991-86b8-197a681f8586"
+ethereum_ancient_mount: /mnt/ethereum-ancient
+ethereum_ancient_fstype: ext4
+
+# Private monitoring network
+ethereum_monitoring_ip: "10.10.0.2"

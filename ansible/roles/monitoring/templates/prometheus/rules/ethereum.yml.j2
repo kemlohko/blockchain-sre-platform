@@ -1,0 +1,46 @@
+groups:
+  - name: ethereum-node
+    rules:
+      - alert: EthereumNodeExporterDown
+        expr: up{job="ethereum_node"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: host
+        annotations:
+          summary: "Ethereum node exporter is unreachable"
+          description: "Prometheus has been unable to scrape the Ethereum host for more than 2 minutes."
+          runbook_url: "https://github.com/kemlohko/blockchain-sre-platform/blob/main/docs/runbooks/ethereum-node-down.md"
+
+      - alert: GethDown
+        expr: up{job="geth"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: execution
+        annotations:
+          summary: "Geth metrics endpoint is unreachable"
+          description: "Prometheus has been unable to scrape Geth for more than 2 minutes."
+          runbook_url: ""https://github.com/kemlohko/blockchain-sre-platform/blob/main/docs/runbooks/geth-service-down.md"
+
+      - alert: LighthouseDown
+        expr: up{job="lighthouse"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: consensus
+        annotations:
+          summary: "Lighthouse metrics endpoint is unreachable"
+          description: "Prometheus has been unable to scrape Lighthouse for more than 2 minutes."
+          runbook_url: "https://github.com/kemlohko/blockchain-sre-platform/blob/main/docs/runbooks/lighthouse-service-down.md"
+
+      - alert: ConsensusNotSynced
+        expr: sync_eth2_synced{job="lighthouse"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          component: consensus
+        annotations:
+          summary: "Lighthouse is not synchronized"
+          description: "Lighthouse has reported an unsynchronized state for more than 5 minutes."
+          runbook_url: "docs/runbooks/lighthouse-not-syncing.md""https://github.com/kemlohko/blockchain-sre-platform/blob/main/docs/runbooks/lighthouse-not-syncing.md"

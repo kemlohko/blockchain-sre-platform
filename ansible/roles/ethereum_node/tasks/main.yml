@@ -1,0 +1,131 @@
+---
+- name: Install required packages
+  ansible.builtin.apt:
+    name:
+      - curl
+      - wget
+      - jq
+      - ca-certificates
+      - gnupg
+      - software-properties-common
+    state: present
+    update_cache: true
+
+- name: Create ethereum system user
+  ansible.builtin.user:
+    name: ethereum
+    system: true
+    shell: /usr/sbin/nologin
+    create_home: false
+
+# -----------------------------------------------------
+# Storage
+# -----------------------------------------------------
+
+- name: Configure Ethereum ancient storage
+  ansible.builtin.include_tasks: storage.yml
+
+# -----------------------------------------------------
+# Ethereum directories
+# -----------------------------------------------------
+
+- name: Create Ethereum directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: ethereum
+    group: ethereum
+    mode: "0755"
+  loop:
+    - /var/lib/ethereum/geth
+    - /var/lib/ethereum/lighthouse
+    - /var/lib/ethereum/jwt
+
+- name: Add Ethereum PPA
+  ansible.builtin.apt_repository:
+    repo: ppa:ethereum/ethereum
+    state: present
+    update_cache: true
+
+- name: Install Geth
+  ansible.builtin.apt:
+    name: ethereum
+    state: present
+    update_cache: true
+
+- name: Check if JWT secret exists
+  ansible.builtin.stat:
+    path: /var/lib/ethereum/jwt/jwt.hex
+  register: jwt_secret
+
+- name: Generate JWT secret
+  ansible.builtin.shell:
+    cmd: "openssl rand -hex 32 > /var/lib/ethereum/jwt/jwt.hex"
+  when: not jwt_secret.stat.exists
+
+- name: Set JWT secret permissions
+  ansible.builtin.file:
+    path: /var/lib/ethereum/jwt/jwt.hex
+    owner: ethereum
+    group: ethereum
+    mode: "0600"
+
+- name: Install Geth systemd service
+  ansible.builtin.template:
+    src: geth.service.j2
+    dest: /etc/systemd/system/geth.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Restart geth
+
+- name: Enable and start Geth
+  ansible.builtin.systemd_service:
+    name: geth
+    enabled: true
+    state: started
+    daemon_reload: true
+
+# ---------------------------------------------------------
+# Lighthouse
+# ---------------------------------------------------------
+
+- name: Download lighthouse
+  ansible.builtin.get_url:
+    url: "https://github.com/sigp/lighthouse/releases/download/{{ lighthouse_version }}/lighthouse-{{ lighthouse_version }}-x86_64-unknown-linux-gnu.tar.gz"
+    dest: "/tmp/lighthouse-{{ lighthouse_version }}.tar.gz"
+    mode: "0644"
+
+- name: Extract lighthouse
+  ansible.builtin.unarchive:
+    src: "/tmp/lighthouse-{{ lighthouse_version }}.tar.gz"
+    dest: /usr/local/bin
+    remote_src: true
+    creates: /usr/local/bin/lighthouse
+
+- name: Install Lighthouse systemd service
+  ansible.builtin.template:
+    src: lighthouse.service.j2
+    dest: /etc/systemd/system/lighthouse.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Restart lighthouse
+
+- name: Enable and start Lighthouse
+  ansible.builtin.systemd_service:
+    name: lighthouse
+    enabled: true
+    state: started
+    daemon_reload: true
+
+# ---------------------------------------------------------
+# Node exporter
+# ---------------------------------------------------------
+
+- name: Configure node exporter
+  ansible.builtin.include_tasks: node_exporter.yml
+
+

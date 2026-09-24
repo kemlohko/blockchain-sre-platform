@@ -1,0 +1,7 @@
+---
+- name: Configure central monitoring
+  hosts: monitoring
+  become: true
+
+  roles: 
+    - monitoring

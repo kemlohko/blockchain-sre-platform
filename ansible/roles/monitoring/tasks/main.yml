@@ -1,0 +1,20 @@
+---
+# -----------------------------------------------------
+# Prometheus
+# -----------------------------------------------------
+
+- name: Configure Prometheus  
+  ansible.builtin.include_tasks: prometheus.yml
+# -----------------------------------------------------
+# Grafana
+# -----------------------------------------------------
+
+- name: Configure Grafana
+  ansible.builtin.include_tasks: grafana.yml
+
+# -----------------------------------------------------
+# Alert Manager
+# -----------------------------------------------------
+
+- name: Configure Alertmanager
+  ansible.builtin.include_tasks: alertmanager.yml

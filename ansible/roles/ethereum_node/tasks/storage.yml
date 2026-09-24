@@ -1,0 +1,55 @@
+---
+- name: Check ancient storage filesystem
+  ansible.builtin.command:
+    cmd: blkid -s UUID -o value {{ ethereum_ancient_device }}
+  register: ancient_disk_uuid
+  changed_when: false
+  check_mode: false
+
+- name: Verify ancient storage UUID
+  ansible.builtin.assert:
+    that:
+      - ancient_disk_uuid.stdout == ethereum_ancient_uuid
+    fail_msg: >-
+      Refusing to continue. Expected Ethereum ancient disk UUID
+      {{ ethereum_ancient_uuid }}, but {{ ethereum_ancient_device }}
+      has UUID {{ ancient_disk_uuid.stdout }}.
+
+- name: Create ancient storage mount point
+  ansible.builtin.file:
+    path: "{{ ethereum_ancient_mount }}"
+    state: directory
+    owner: ethereum
+    group: ethereum
+    mode: "0750"
+
+- name: Mount Ethereum ancient storage
+  ansible.posix.mount:
+    path: "{{ ethereum_ancient_mount }}"
+    src: "UUID={{ ethereum_ancient_uuid }}"
+    fstype: "{{ ethereum_ancient_fstype }}"
+    opts: defaults
+    state: mounted
+
+- name: Set ancient storage ownership
+  ansible.builtin.file:
+    path: "{{ ethereum_ancient_mount }}"
+    state: directory
+    owner: ethereum
+    group: ethereum
+    mode: "0750"
+
+- name: Check ancient storage mount
+  ansible.builtin.command:
+    cmd: findmnt -n -o UUID --target {{ ethereum_ancient_mount }}
+  register: ancient_mount_uuid
+  changed_when: false
+  check_mode: false
+
+- name: Verify correct ancient filesystem is mounted
+  ansible.builtin.assert:
+    that:
+      - ancient_mount_uuid.stdout == ethereum_ancient_uuid
+    fail_msg: >-
+      Refusing to configure Geth because the expected ancient
+      filesystem is not mounted at {{ ethereum_ancient_mount }}

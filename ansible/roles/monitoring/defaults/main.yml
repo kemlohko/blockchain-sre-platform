@@ -1,0 +1,7 @@
+---
+prometheus_version: "3.14.0"
+prometheus_retention_time: "15d"
+
+alertmanager_version: "0.28.1"
+
+ethereum_monitoring_ip: "10.10.0.2"

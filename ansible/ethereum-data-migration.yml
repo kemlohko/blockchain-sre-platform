@@ -1,0 +1,51 @@
+---
+# --- Ethereum data disk migration ---
+
+- name: Stop Ethereum services before data migration
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    state: stopped
+  loop:
+    - lighthouse
+    - geth
+
+- name: Check filesystem on new Ethereum disk
+  ansible.builtin.command:
+    cmd: blkid /dev/disk/by-id/google-ethereum-data-new
+  register: new_disk_blkid
+  changed_when: false
+  failed_when: false
+
+- name: Create ext4 filesystem on new Ethereum disk
+  community.general.filesystem:
+    fstype: ext4
+    dev: /dev/disk/by-id/google-ethereum-data-new
+  when: new_disk_blkid.rc != 0
+
+- name: Create temporary mount point
+  ansible.builtin.file:
+    path: /mnt/ethereum-new
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Mount new Ethereum disk temporarily
+  ansible.posix.mount:
+    path: /mnt/ethereum-new
+    src: /dev/disk/by-id/google-ethereum-data-new
+    fstype: ext4
+    state: mounted
+
+- name: Install rsync
+  ansible.builtin.apt:
+    name: rsync
+    state: present
+    update_cache: true
+
+- name: Copy Ethereum data to new disk
+  ansible.builtin.command:
+    cmd: >
+      rsync -aHAX --info=progress2
+      /var/lib/ethereum/
+      /mnt/ethereum-new/

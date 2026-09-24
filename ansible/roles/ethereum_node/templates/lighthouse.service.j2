@@ -1,0 +1,32 @@
+[Unit]
+Description=Lighthouse Ethereum Consensus Client
+After=network-online.target geth.service
+Wants=network-online.target
+Requires=geth.service
+
+[Service]
+User=ethereum
+Group=ethereum
+Type=simple
+
+ExecStart=/usr/local/bin/lighthouse bn \
+    --network {{ lighthouse_network }} \
+    --datadir /var/lib/ethereum/lighthouse \
+    --execution-endpoint http://127.0.0.1:8551 \
+    --execution-jwt /var/lib/ethereum/jwt/jwt.hex \
+    --checkpoint-sync-url {{ lighthouse_checkpoint_sync_url }} \
+    --port 9000 \
+    --http \
+    --http-address 127.0.0.1 \
+    --http-port 5052 \
+    --metrics \
+    --metrics-address {{ ethereum_monitoring_ip }} \
+    --metrics-port 5054
+
+Restart=on-failure
+RestartSec=5
+
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
