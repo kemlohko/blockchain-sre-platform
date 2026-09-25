@@ -5,6 +5,7 @@ import time
 import pika
 import requests
 from database import Job, SessionLocal
+from prometheus_client import Counter, Histogram, start_http_server
 
 RABBITMQ_HOST = os.getenv("RABBITMQ_HOST", "rabbitmq")
 RABBITMQ_USER = os.getenv("RABBITMQ_USER", "admin")
@@ -22,6 +23,28 @@ DLX_NAME = "blockchain_dlx"
 
 MAX_RETRIES = 3
 
+WORKER_JOBS = Counter(
+    "blockchain_worker_jobs_total",
+    "Total number of jobs processed by the worker",
+    ["status"]
+)
+
+WORKER_RETRIES = Counter(
+    "blockchain_worker_retries_total",
+    "Total number of job retries"
+)
+
+WORKER_JOB_DURATION = Histogram(
+    "blockchain_worker_job_duration_seconds",
+    "Time spent processing blockchain jobs"
+)
+
+ETHEREUM_RPC_DURATION = Histogram(
+    "blockchain_ethereum_rpc_duration_seconds",
+    "Ethereum JSON-RPC request duration",
+    ["method"]
+)
+
 def get_transaction(tx_hash):
     payload = {
         "jsonrpc": "2.0",
@@ -30,23 +53,36 @@ def get_transaction(tx_hash):
         "id": 1
     }
 
-    response = requests.post(
-        ETHEREUM_RPC_URL,
-        json=payload,
-        timeout=10
-    )
+    start_time = time.perf_counter()
 
-    response.raise_for_status()
+    try:
+        response = requests.post(
+            ETHEREUM_RPC_URL,
+            json=payload,
+            timeout=10
+        )
 
-    data = response.json()
+        response.raise_for_status()
 
-    if "error" in data:
-        raise RuntimeError(data["error"])
+        data = response.json()
+
+        if "error" in data:
+            raise RuntimeError(data["error"])
+        
+        return data.get("result")
     
-    return data.get("result")
+    finally:
+        duration = time.perf_counter() - start_time
+
+        ETHEREUM_RPC_DURATION.labels(
+            method="eth_getTransactionByHash"
+        ).observe(duration)
+
 
 
 def process_job(ch, method, properties, body):
+    start_time = time.perf_counter()
+
     job = json.loads(body)
     db = SessionLocal()
 
@@ -98,6 +134,10 @@ def process_job(ch, method, properties, body):
                         db_job.result = json.dumps(result)
                         db_job.error = None
                         db.commit()
+
+                        WORKER_JOBS.labels(
+                            status="completed"
+                        ).inc()
                 finally:
                     db.close()
 
@@ -121,6 +161,7 @@ def process_job(ch, method, properties, body):
 
         if retry_count < MAX_RETRIES:
             next_retry = retry_count + 1
+            WORKER_RETRIES.inc()
 
             print(
                 f"Scheduling retry {next_retry}/{MAX_RETRIES}"
@@ -176,12 +217,20 @@ def process_job(ch, method, properties, body):
                     db_job.status = "FAILED"
                     db_job.error = str(error)
                     db.commit()
+
+                    WORKER_JOBS.labels(
+                        status="failed"
+                    ).inc()
             finally:
                 db.close()
 
         ch.basic_ack(
             delivery_tag=method.delivery_tag,
         )
+
+    WORKER_JOB_DURATION.observe(
+        time.perf_counter() - start_time
+    )
 
 def get_retry_count(properties):
     headers = properties.headers or {}
@@ -240,6 +289,9 @@ channel.basic_consume(
     on_message_callback=process_job
 )
 
+start_http_server(8001)
+
+print("Worker metrics available on :8001")
 print("Worker waiting for blockchain jobs...")
 
 channel.start_consuming()

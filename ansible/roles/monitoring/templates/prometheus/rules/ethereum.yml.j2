@@ -21,7 +21,7 @@ groups:
         annotations:
           summary: "Geth metrics endpoint is unreachable"
           description: "Prometheus has been unable to scrape Geth for more than 2 minutes."
-          runbook_url: ""https://github.com/kemlohko/blockchain-sre-platform/blob/main/docs/runbooks/geth-service-down.md"
+          runbook_url: "https://github.com/kemlohko/blockchain-sre-platform/blob/main/docs/runbooks/geth-service-down.md"
 
       - alert: LighthouseDown
         expr: up{job="lighthouse"} == 0
@@ -43,4 +43,76 @@ groups:
         annotations:
           summary: "Lighthouse is not synchronized"
           description: "Lighthouse has reported an unsynchronized state for more than 5 minutes."
-          runbook_url: "docs/runbooks/lighthouse-not-syncing.md""https://github.com/kemlohko/blockchain-sre-platform/blob/main/docs/runbooks/lighthouse-not-syncing.md"
+          runbook_url: "https://github.com/kemlohko/blockchain-sre-platform/blob/main/docs/runbooks/lighthouse-not-syncing.md"
+    
+      - alert: RootDiskUsageHigh
+        expr: |
+          100 * (
+            1 -
+            node_filesystem_avail_bytes{
+              job="ethereum_node",
+              mountpoint="/",
+              fstype!="rootfs"
+            }
+            /
+            node_filesystem_size_bytes{
+              job="ethereum_node",
+              mountpoint="/",
+              fstype!="rootfs"
+            }
+          ) > 85
+        for: 10m
+        labels:
+          severity: warning
+          component: storage
+        annotations:
+          summary: "Ethereum node root filesystem usage is high"
+          description: "Root filesystem usage has exceeded 85% for more than 10 minutes."
+          runbook_url: "https://github.com/kemlohko/blockchain-sre-platform/blob/main/docs/runbooks/high-disk-usage.md"
+
+      - alert: AncientDiskUsageHigh
+        expr: |
+          100 * (
+            1 -
+            node_filesystem_avail_bytes{
+              job="ethereum_node",
+              mountpoint="/mnt/ethereum-ancient",
+              fstype!="rootfs"
+            }
+            /
+            node_filesystem_size_bytes{
+              job="ethereum_node",
+              mountpoint="/mnt/ethereum-ancient",
+              fstype!="rootfs"
+            }
+          ) > 85
+        for: 10m
+        labels:
+          severity: warning
+          component: storage
+        annotations:
+          summary: "Ethereum ancient filesystem usage is high"
+          description: "Ancient-data filesystem usage has exceeded 85% for more than 10 minutes."
+          runbook_url: "https://github.com/kemlohko/blockchain-sre-platform/blob/main/docs/runbooks/high-disk-usage.md"
+
+      - alert: GethPeerCountLow
+        expr: p2p_peers{job="geth"} < 5
+        for: 10m
+        labels:
+          severity: warning
+          component: execution
+        annotations:
+          summary: "Geth peer count is low"
+          description: "Geth has had fewer than 5 peers for more than 10 minutes."
+          runbook_url: "https://github.com/kemlohko/blockchain-sre-platform/blob/main/docs/runbooks/geth-low-peer-count.md"
+
+      - alert: LighthousePeerCountLow
+        expr: libp2p_peers{job="lighthouse"} < 10
+        for: 10m
+        labels:
+          severity: warning
+          component: consensus
+        annotations:
+          summary: "Lighthouse peer count is low"
+          description: "Lighthouse has had fewer than 10 peers for more than 10 minutes."
+          runbook_url: "https://github.com/kemlohko/blockchain-sre-platform/blob/main/docs/runbooks/lighthouse-low-peer-count.md"

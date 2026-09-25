@@ -40,10 +40,14 @@ services:
       RABBITMQ_USER: admin
       RABBITMQ_PASSWORD: admin
       DATABASE_URL: postgresql://blockchain:blockchain@postgres:5432/blockchain
-      ETHEREUM_RPC_URL: https://ethereum-sepolia-rpc.publicnode.invalid.com
+      ETHEREUM_RPC_URL: https://ethereum-sepolia-rpc.publicnode.com
     depends_on:
       rabbitmq:
         condition: service_healthy
+      postgres:
+        condition: service_healthy
+    expose:
+      - "8001"
 
   postgres:
     image: postgres:17
@@ -84,7 +88,7 @@ services:
       GF_SECURITY_ADMIN_USER: admin
       GF_SECURITY_ADMIN_PASSWORD: admin
     volumes:
-      - grafana_data:/var/lib/grafane
+      - grafana_data:/var/lib/grafana
     depends_on:
       - prometheus
 

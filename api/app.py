@@ -1,11 +1,14 @@
 import json
 import os
 import uuid
+import time
 
 import pika
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import Response
 from pydantic import BaseModel
 from database import Job, SessionLocal, create_tables
+from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
 
 class TransactionRequest(BaseModel):
     tx_hash: str
@@ -20,11 +23,57 @@ app = FastAPI(
 def startup():
     create_tables()
 
+@app.middleware("http")
+async def prometheus_middleware(request, call_next):
+    start_time = time.perf_counter()
+
+    response = await call_next(request)
+
+    duration = time.perf_counter() - start_time
+
+    route = request.scope.get("route")
+
+    if route:
+        endpoint = route.path
+    else:
+        endpoint = request.url.path
+
+    HTTP_REQUESTS.labels(
+        method=request.method,
+        endpoint=endpoint,
+        status=response.status_code
+    ).inc()
+
+    HTTP_REQUEST_DURATION.labels(
+        method=request.method,
+        endpoint=endpoint
+    ).observe(duration)
+
+    return response
+
 RABBITMQ_HOST = os.getenv("RABBITMQ_HOST", "rabbitmq")
 RABBITMQ_USER = os.getenv("RABBITMQ_USER", "admin")
 RABBITMQ_PASSWORD = os.getenv("RABBITMQ_PASSWORD", "admin")
 
 QUEUE_NAME = "blockchain_jobs"
+
+HTTP_REQUESTS = Counter(
+    "blockchain_api_http_requests_total",
+    "Total number of HTTP requests",
+    ["method", "endpoint", "status"]
+)
+
+HTTP_REQUEST_DURATION = Histogram(
+    "blochain_api_http_request_duration_seconds",
+    "HTTP request duration in seconds",
+    ["method", "endpoint"]
+)
+
+JOBS_SUBMITTED = Counter(
+    "blockchain_jobs_submitted_total",
+    "Total number of blockchain analysis jobs submitted",
+    ["type"]
+)
 
 def get_rabbitmq_connection():
     credentials = pika.PlainCredentials(
@@ -122,6 +171,10 @@ def analyze_transaction(request: TransactionRequest):
         )
     )
 
+    JOBS_SUBMITTED.labels(
+        type="transaction_analysis"
+    ).inc()
+
     connection.close()
 
     return {
@@ -157,3 +210,10 @@ def get_job(job_id: str):
     
     finally:
         db.close()
+
+@app.get("/metrics", include_in_schema=False)
+def metrics():
+    return Response(
+        content=generate_latest(),
+        media_type=CONTENT_TYPE_LATEST
+    )
